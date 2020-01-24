@@ -1,0 +1,25 @@
+::-webkit-input-placeholder
+{
+   color: #646464;
+}
+
+:-moz-placeholder
+{ /* Firefox 18- */
+   color: #646464;
+}
+
+::-moz-placeholder
+{  /* Firefox 19+ */
+   color: #646464;
+}
+
+:-ms-input-placeholder
+{
+   color: #646464;
+}
+
+textarea:focus,
+input:focus
+{
+    outline: none;
+}
