@@ -176,28 +176,69 @@ socket.on("player-position", function(data) {
   camera.y = (height / 2) - (data.y * TILE_SIZE);
 })
 
-
+// Check for key down events
 document.addEventListener('keydown', function(event) {
   if(event.code == "KeyW") {
-    socket.emit("move-key", {key: "up", press: true});
-    console.print("Hello");
+    socket.emit("move-key", {key: "up", press: 1});
   } else if(event.code == "KeyD") {
-    socket.emit("move-key", {key: "right", press: true});
+    socket.emit("move-key", {key: "right", press: 1});
   } else if(event.code == "KeyS") {
-    socket.emit("move-key", {key: "down", press: true});
+    socket.emit("move-key", {key: "down", press: 1});
   } else if(event.code == "KeyA") {
-    socket.emit("move-key", {key: "left", press: true});
+    socket.emit("move-key", {key: "left", press: 1});
   }
 });
 
+// Check for key up events
 document.addEventListener('keyup', function(event) {
   if(event.code == "KeyW") {
-    socket.emit("move-key", {key: "up", press: false});
+    socket.emit("move-key", {key: "up", press: 0});
   } else if(event.code == "KeyD") {
-    socket.emit("move-key", {key: "right", press: false});
+    socket.emit("move-key", {key: "right", press: 0});
   } else if(event.code == "KeyS") {
-    socket.emit("move-key", {key: "down", press: false});
+    socket.emit("move-key", {key: "down", press: 0});
   } else if(event.code == "KeyA") {
-    socket.emit("move-key", {key: "left", press: false});
+    socket.emit("move-key", {key: "left", press: 0});
   }
 });
+
+// Check for touch events
+document.addEventListener('touchstart', function(e) {
+  switch (e.touches.length) {
+    case 1: handleTouchStart(e); break;
+    default: console.log("Not supported"); break;
+  }   
+}, false);
+
+// Check for touch events
+document.addEventListener('touchmove', function(e) {
+  switch (e.touches.length) {
+    case 1: handelTouchMoved(e); break;
+    default: console.log("Not supported"); break;
+  }   
+}, false);
+
+// Check for touch events
+document.addEventListener('touchend', function(e) {
+  switch (e.touches.length) {
+    case 1: handelTouchEnd(e); break;
+    default: console.log("Not supported"); break;
+  }   
+}, false);
+
+var touchStart = {x: 0, y: 0};
+
+function handleTouchStart(e) {
+  touchStart.x = e.touches[0].clientX;
+  touchStart.y = e.touches[0].clientY;
+}
+
+function handelTouchMoved(e) {
+  var xDistance = e.touches[0].clientX - touchStart.x;
+  var yDistance = e.touches[0].clientY - touchStart.y;
+  socket.emit("move-touch", {xDistance: xDistance, yDistance: yDistance, end: false});
+}
+
+function handelTouchEnd(e) {
+  socket.emit("move-touch", {end: true});
+}

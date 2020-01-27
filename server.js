@@ -46,8 +46,9 @@ io.sockets.on("connection", function(socket)
     socket: socket,
     loaded: false,
     sentChunks: {},
-    velocity: {x: 0,  y: 0},
-    acceleration: {x: 0, y: 0},};
+    velocity: {x: 0, y: 0},
+    maxMovementSpeed: 0.4,
+    friction: 0.6};
   console.log("Conected: " + uuid);
 
   // Add the joined player to everyones view except this player
@@ -86,21 +87,22 @@ io.sockets.on("connection", function(socket)
 
   socket.on("move-key", function(data) {
     if(data.key == "up") {
-      players[uuid].position.y--;
+      players[uuid].velocity.y = -players[uuid].maxMovementSpeed;
     } else if(data.key == "down") {
-      players[uuid].position.y++;
+      players[uuid].velocity.y = players[uuid].maxMovementSpeed;
     } else if(data.key == "left") {
-      players[uuid].position.x--;
+      players[uuid].velocity.x = -players[uuid].maxMovementSpeed;
     } else if(data.key == "right") {
-      players[uuid].position.x++;
+      players[uuid].velocity.x = players[uuid].maxMovementSpeed;
     }
+  });
 
-    io.emit("update-entity", {
-      x: players[uuid].position.x,
-      y: players[uuid].position.y,
-      uuid: uuid
-    })
-    socket.emit("player-position", {x: players[uuid].position.x, y: players[uuid].position.y});
+  socket.on("move-touch", function(data) {
+    var xLength = Math.min(Math.max(data.xDistance, -500), 500);
+    var yLength = Math.min(Math.max(data.yDistance, -500), 500);
+
+    players[uuid].velocity.x = (xLength / 500) * players[uuid].maxMovementSpeed;
+    players[uuid].velocity.y = (yLength / 500) * players[uuid].maxMovementSpeed;
   });
 });
 
@@ -165,24 +167,63 @@ setInterval(function()
           }
         }
       }
+    }
 
-      // Remove chunks that are not needed by the clients
-      const sentChunkKeys = Object.keys(players[uuid].sentChunks)
-      for(var sentChunk of sentChunkKeys) {
-        var position = sentChunk.split(",");
-        if(Math.sqrt(Math.pow(Math.abs(position[0] - playerChunkX), 2) + Math.pow(Math.abs(position[1] - playerChunkY), 2)) > VIEW_DISTANCE) {
-          delete players[uuid].sentChunks[sentChunk];
-          players[uuid].socket.emit("remove-chunk", {x: position[0], y: position[1]});
-        }
+    // Remove chunks that are not needed by the clients
+    const sentChunkKeys = Object.keys(players[uuid].sentChunks)
+    for(var sentChunk of sentChunkKeys) {
+      var position = sentChunk.split(",");
+      if(Math.sqrt(Math.pow(Math.abs(position[0] - playerChunkX), 2) + Math.pow(Math.abs(position[1] - playerChunkY), 2)) > VIEW_DISTANCE) {
+        delete players[uuid].sentChunks[sentChunk];
+        players[uuid].socket.emit("remove-chunk", {x: position[0], y: position[1]});
       }
     }
+
+    updatePlayer(uuid);
   }
-}, 1000 / 25)
+}, 1000 / 25);
+
+function updatePlayer(uuid) {
+  players[uuid].position.x += players[uuid].velocity.x;
+  players[uuid].position.y += players[uuid].velocity.y;
+
+  players[uuid].velocity.x *= players[uuid].friction;
+  players[uuid].velocity.y *= players[uuid].friction;
+  if(players[uuid].velocity.x < 0.05 && players[uuid].velocity.x > -0.05) players[uuid].velocity.x = 0;
+  if(players[uuid].velocity.y < 0.05 && players[uuid].velocity.y > -0.05) players[uuid].velocity.y = 0;
+
+  io.emit("update-entity", {
+    x: Math.floor(players[uuid].position.x),
+    y: Math.floor(players[uuid].position.y),
+    uuid: uuid
+  });
+  players[uuid].socket.emit("player-position", {x: Math.floor(players[uuid].position.x), y: Math.floor(players[uuid].position.y)});
+}
+
+// Chunk culling function
+setInterval(function()
+{
+  // Find out if any player is using the loaded chunk
+  var usedChunks = {};
+  const playerKeys = Object.keys(players);
+  for(var uuid of playerKeys) {
+    const sentChunkKeys = Object.keys(players[uuid].sentChunks)
+      for(var sentChunk of sentChunkKeys) {
+        usedChunks[sentChunk]++;
+      }
+  }
+
+  // Delete chunks that are not used
+  const chunkKeys = Object.keys(players);
+  for(var chunk of chunkKeys) {
+    if(chunkKeys[chunk] == 0) {
+      delete chunks[chunkKeys];
+    }
+  }
+}, 1000);
 
 // Generates terrain and tiles for a chunk
 function generateChunk(x, y) {
-  console.log("Generating chunk: " + x + "," + y);
-
   var tiles = [];
 
   for(var i = 0; i < TILES_PER_CHUNK; i++) {
