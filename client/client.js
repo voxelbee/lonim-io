@@ -11,7 +11,7 @@ var width = window.innerWidth;
 var height = window.innerHeight;
 
 // Create the socket
-var socket = io();
+var socket = io({forceNew: true});
 
 // setup renderer and ticker
 var renderer = new PIXI.Renderer({ width: width, height: height, backgroundColor: 0x000000 });
@@ -178,12 +178,10 @@ socket.on("player-position", function(data) {
 
 // Check for key down events
 document.addEventListener('keydown', function(event) {
-  if(event.code == "KeyW") {
-    socket.emit("move-key", {key: "up", press: 1});
+  if(event.code == "Space") {
+    socket.emit("move-key", {key: "space", press: 1});
   } else if(event.code == "KeyD") {
     socket.emit("move-key", {key: "right", press: 1});
-  } else if(event.code == "KeyS") {
-    socket.emit("move-key", {key: "down", press: 1});
   } else if(event.code == "KeyA") {
     socket.emit("move-key", {key: "left", press: 1});
   }
@@ -191,12 +189,10 @@ document.addEventListener('keydown', function(event) {
 
 // Check for key up events
 document.addEventListener('keyup', function(event) {
-  if(event.code == "KeyW") {
-    socket.emit("move-key", {key: "up", press: 0});
+  if(event.code == "Space") {
+    socket.emit("move-key", {key: "space", press: 0});
   } else if(event.code == "KeyD") {
     socket.emit("move-key", {key: "right", press: 0});
-  } else if(event.code == "KeyS") {
-    socket.emit("move-key", {key: "down", press: 0});
   } else if(event.code == "KeyA") {
     socket.emit("move-key", {key: "left", press: 0});
   }

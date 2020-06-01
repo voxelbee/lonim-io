@@ -25,7 +25,7 @@ app.use("/client", express.static(__dirname + "/client"));
 const fastnoise = require('fastnoisejs');
 const noise = fastnoise.Create(10)
  
-noise.SetNoiseType(fastnoise.Cellular)
+noise.SetNoiseType(fastnoise.Simplex)
 
 // All the players on the server
 var players = {};
@@ -42,6 +42,7 @@ io.sockets.on("connection", function(socket)
   // Add the player to the players map
   players[uuid] = {
     position: {x: 0, y: 0},
+    lastSentPosition: {x: Math.random(), y: 0},
     color: Math.random() * 0xFFFFFF,
     socket: socket,
     loaded: false,
@@ -86,10 +87,8 @@ io.sockets.on("connection", function(socket)
   });
 
   socket.on("move-key", function(data) {
-    if(data.key == "up") {
-      players[uuid].velocity.y = -players[uuid].maxMovementSpeed;
-    } else if(data.key == "down") {
-      players[uuid].velocity.y = players[uuid].maxMovementSpeed;
+    if(data.key == "space") {
+      players[uuid].position.y -= 2;
     } else if(data.key == "left") {
       players[uuid].velocity.x = -players[uuid].maxMovementSpeed;
     } else if(data.key == "right") {
@@ -184,20 +183,62 @@ setInterval(function()
 }, 1000 / 25);
 
 function updatePlayer(uuid) {
-  players[uuid].position.x += players[uuid].velocity.x;
-  players[uuid].position.y += players[uuid].velocity.y;
+  if(players[uuid].velocity.x < 0.1 && players[uuid].velocity.x > -0.1) players[uuid].velocity.x = 0;
+  if(players[uuid].velocity.y < 0.1 && players[uuid].velocity.y > -0.1) players[uuid].velocity.y = 0;
 
   players[uuid].velocity.x *= players[uuid].friction;
   players[uuid].velocity.y *= players[uuid].friction;
-  if(players[uuid].velocity.x < 0.05 && players[uuid].velocity.x > -0.05) players[uuid].velocity.x = 0;
-  if(players[uuid].velocity.y < 0.05 && players[uuid].velocity.y > -0.05) players[uuid].velocity.y = 0;
+  players[uuid].velocity.y = Math.min(Math.max(players[uuid].velocity.y + (players[uuid].maxMovementSpeed / 3), -players[uuid].maxMovementSpeed), players[uuid].maxMovementSpeed);
 
-  io.emit("update-entity", {
-    x: Math.floor(players[uuid].position.x),
-    y: Math.floor(players[uuid].position.y),
-    uuid: uuid
-  });
+  checkCollisions(uuid);
+
+  players[uuid].position.x += players[uuid].velocity.x;
+  players[uuid].position.y += players[uuid].velocity.y;
+
+  sendPlayerPosition(uuid);
+}
+
+function sendPlayerPosition(uuid) {
+  if(players[uuid].lastSentPosition.x != players[uuid].position.x
+    || players[uuid].lastSentPosition.y != players[uuid].position.y) {
+    const playerKeys = Object.keys(players);
+    for(var uuidL of playerKeys) {
+      if(!players[uuidL].loaded) {
+        continue;
+      }
+      players[uuidL].socket.emit("update-entity", {
+        x: Math.floor(players[uuid].position.x),
+        y: Math.floor(players[uuid].position.y),
+        uuid: uuid
+      });
+    }
+    players[uuid].lastSentPosition.x = players[uuid].position.x;
+    players[uuid].lastSentPosition.y = players[uuid].position.y;
+  }
+
   players[uuid].socket.emit("player-position", {x: Math.floor(players[uuid].position.x), y: Math.floor(players[uuid].position.y)});
+}
+
+function checkCollisions(uuid) {
+  if(players[uuid].velocity.x > 0) {
+    if(getTile(players[uuid].position.x + 1, players[uuid].position.y).charId != 0) {
+      players[uuid].velocity.x = 0;
+    }
+  } else if(players[uuid].velocity.x < 0) {
+    if(getTile(players[uuid].position.x - 1, players[uuid].position.y).charId != 0) {
+      players[uuid].velocity.x = 0;
+    }
+  }
+
+  if(players[uuid].velocity.y > 0) {
+    if(getTile(players[uuid].position.x, players[uuid].position.y + 1).charId != 0) {
+      players[uuid].velocity.y = 0;
+    }
+  } else if(players[uuid].velocity.y < 0) {
+    if(getTile(players[uuid].position.x, players[uuid].position.y - 1).charId != 0) {
+      players[uuid].velocity.y = 0;
+    }
+  }
 }
 
 // Chunk culling function
@@ -236,10 +277,32 @@ function generateChunk(x, y) {
   return {tiles: tiles};
 }
 
+function getTile(x, y) {
+  var chunkX = Math.floor(x / TILES_PER_CHUNK);
+  var chunkY = Math.floor(y / TILES_PER_CHUNK);
+  x = Math.floor(x) % TILES_PER_CHUNK;
+  y = Math.floor(y) % TILES_PER_CHUNK;
+  if(x < 0) x += TILES_PER_CHUNK;
+  if(y < 0) y += TILES_PER_CHUNK;
+
+  if(chunks.hasOwnProperty(chunkX + "," + chunkY)) {
+    return chunks[chunkX + "," + chunkY].tiles[x * TILES_PER_CHUNK + y];
+  } else {
+    return {charId: 0, colorId: 0};
+  }
+}
+
 // Returns a tile object {charId: , colorId: } for the specified location
 function generateTerrainTile(x, y) {
-  var noiseValue = Math.floor((noise.GetNoise(x * 8, y * 8) + 1) * 128);
-  return {charId: noiseValue, colorId: noiseValue};
+  const NOISE_SCALE = 3;
+
+  var terrainLevels = (noise.GetNoise(x * NOISE_SCALE, 0) + 1) / 2;
+  var noiseValue = 0;
+  if(y > terrainLevels * 50) {
+    noiseValue = 128;
+  }
+  //var noiseValue = Math.floor((terrainLevels + 1) * 128);
+  return {charId: noiseValue, colorId: 0x00FF00};
 }
 
 // Sets a tile in a specified location tile data = {charId: , colorId: }
