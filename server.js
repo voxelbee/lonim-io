@@ -1,5 +1,5 @@
 // SETTINGS
-const VIEW_DISTANCE = 4;
+const VIEW_DISTANCE = 2;
 const TILES_PER_CHUNK = 16;
 // END SETTINGS
 
